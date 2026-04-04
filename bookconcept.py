@@ -1,79 +1,64 @@
 import os
 import re
-import google.generativeai as genai
+import time
+from google import genai
 from dotenv import load_dotenv
 
-# 1. Setup & Keys
 load_dotenv()
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+MODEL_ID = "gemini-2.0-flash" 
 
-def sanitize_name(name):
-    """Removes characters that computers hate in folder names (like : / ?)"""
-    clean = re.sub(r'[\\/*?:"<>|]', "", name)
-    return clean.strip()
+def sanitize(name):
+    return re.sub(r'[\\/*?:"<>|]', "", name).strip()
 
 def run_concepts():
-    # This looks for the file created by strategy.py
     strategy_path = "02_Niche_Projects/BLUEPRINT.md"
     base_folder = "02_Niche_Projects"
 
-    if not os.path.exists(strategy_path):
-        print(f"❌ Error: {strategy_path} not found. Run 'python strategy.py' first!")
-        return
-
-    # 2. Read the Master Strategy
     with open(strategy_path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    # 3. Find the 10 Book Titles (looks for **Book X: Title**)
     titles = re.findall(r"\*\*Book \d+: (.*?)\*\*", content)
-    
     if not titles:
-        # Backup: if the AI used a different bolding style
         titles = re.findall(r"\*\*(.*?)\*\*", content)[:10]
 
-    if not titles:
-        print("❌ Could not find any book titles in BLUEPRINT.md. Check the file format!")
-        return
+    print(f"🚀 Starting Resilient Build for {len(titles)} books...")
 
-    print(f"🚀 Found {len(titles)} books. Building your concept folders...")
-
-    # 4. Connect to the 2026 Free Model
-    model = genai.GenerativeModel('gemini-2.5-flash')
-
-    for title in titles:
-        # Create a clean name for the folder and the file
-        safe_title = sanitize_name(title)
+    for i, title in enumerate(titles):
+        safe_title = sanitize(title)
         book_dir = os.path.join(base_folder, safe_title)
-        
-        # Create the folder
         os.makedirs(book_dir, exist_ok=True)
+        file_path = os.path.join(book_dir, f"{safe_title}.md")
+
+        # Skip if already created (so you can restart the script safely)
+        if os.path.exists(file_path):
+            print(f"⏭️  Skipping {safe_title} (Already exists)")
+            continue
+
+        success = False
+        retries = 0
         
-        print(f"🏗️  Designing Concept: {safe_title}...")
+        while not success and retries < 3:
+            print(f"🏗️  [{i+1}/10] Designing: {safe_title} (Attempt {retries + 1})...")
+            prompt = f"Create a detailed KDP Concept & Interior Spec doc for: {title}."
 
-        # The "Quality" Prompt
-        prompt = f"""
-        Act as a Premium KDP Product Designer. 
-        Create a 'High-Quality Concept Document' for the book: "{title}"
-        
-        Provide:
-        1. THE UNIQUE HOOK: Why is this better than competitors?
-        2. TARGET AUDIENCE: Who is the buyer?
-        3. INTERIOR BLUEPRINT: Exactly what goes on the pages?
-        4. CHAPTER BREAKDOWN: Detailed Table of Contents.
-        5. AI WRITING PROMPT: A master-instruction to write this book later.
-        """
+            try:
+                response = client.models.generate_content(model=MODEL_ID, contents=prompt)
+                with open(file_path, "w") as f:
+                    f.write(response.text)
+                print(f"✅ Created: {safe_title}")
+                success = True
+                time.sleep(15) # Standard cool-down
+            except Exception as e:
+                retries += 1
+                if "503" in str(e) or "429" in str(e):
+                    print(f"⚠️ Server busy/limit hit. Cooling down for 30s...")
+                    time.sleep(30)
+                else:
+                    print(f"❌ Permanent Error: {e}")
+                    break
 
-        try:
-            response = model.generate_content(prompt)
-            
-            # Save the file INSIDE the folder, named after the book
-            file_path = os.path.join(book_dir, f"{safe_title}.md")
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(response.text)
-                
-            print(f"✅ Success: Created folder and file for '{safe_title}'")
-        except Exception as e:
-            print(f"⚠️ Error on {title}: {e}")
+    print("\n✨ Factory Cycle Complete.")
 
-    print(f"\n✨ DONE! Check your '{base_folder}' folder for your new book designs.")
+if __name__ == "__main__":
+    run_concepts()
