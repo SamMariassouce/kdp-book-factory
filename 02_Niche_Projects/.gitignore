@@ -1,0 +1,37 @@
+# --- AI & Cloud Secrets (CRITICAL) ---
+.env
+service-account.json
+*.json
+!package.json
+credentials.json
+
+# --- Python & Environments ---
+.venv/
+venv/
+env/
+bin/
+lib/
+share/
+include/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# --- Mac OS Specific ---
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+
+# --- Market Data & CSVs (Keep if you want to share research, exclude if private) ---
+# If you want to keep your niche research private, uncomment the line below:
+01_Market_CSVs/
+
+# --- Local Project Files ---
+# If you use VS Code, hide the workspace settings
+.vscode/
+.idea/
+*.swp
+*.log
